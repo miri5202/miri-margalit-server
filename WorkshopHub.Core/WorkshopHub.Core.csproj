@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- שכבת Core: ישויות, ממשקים, DTOs ו-Enums בלבד.
+       אין כאן אף PackageReference ואף ProjectReference – Core לא תלוי בשום דבר חיצוני. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

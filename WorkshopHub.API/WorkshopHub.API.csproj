@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- שכבת API: Controllers, Middleware ו-Program.cs.
+       מפנה ל-Service ול-Core. את Data היא מכירה רק לצורך רישום השירותים ב-Program.cs. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- מזהה של תיקיית ה-User Secrets במחשב המפתחת. זה לא סוד; הסודות עצמם נשמרים מחוץ ל-repo. -->
+    <UserSecretsId>4800c5a4-643a-4301-8b50-e5d87e8f1044</UserSecretsId>
+    <!-- הערות ה-XML שעל ה-Controllers מוצגות ב-Swagger -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.31" />
+    <!-- מיישר את כל חבילות Microsoft.IdentityModel לאותה גרסה (8.14.0) שבה משתמשת גם שכבת ה-Service -->
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.14.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.31">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="NLog.Web.AspNetCore" Version="6.2.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WorkshopHub.Core\WorkshopHub.Core.csproj" />
+    <ProjectReference Include="..\WorkshopHub.Service\WorkshopHub.Service.csproj" />
+    <ProjectReference Include="..\WorkshopHub.Data\WorkshopHub.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="nlog.config" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

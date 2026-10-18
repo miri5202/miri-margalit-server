@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- שכבת Service: הלוגיקה העסקית. מפנה ל-Core בלבד – לא ל-Data ולא ל-EF Core.
+       הגישה לנתונים נעשית רק דרך ממשקי ה-repositories שמוגדרים ב-Core. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="16.2.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WorkshopHub.Core\WorkshopHub.Core.csproj" />
+  </ItemGroup>
+
+</Project>

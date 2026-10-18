@@ -1,0 +1,48 @@
+# ---------- Build output ----------
+bin/
+obj/
+out/
+publish/
+[Dd]ebug/
+[Rr]elease/
+
+# ---------- Visual Studio / Rider / VS Code ----------
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# ---------- Test results ----------
+TestResults/
+*.trx
+coverage*.xml
+*.coverage
+
+# ---------- Logs (NLog writes to WorkshopHub.API/logs) ----------
+logs/
+*.log
+
+# ---------- Secrets ----------
+# Secrets live in User Secrets (outside the repository). These patterns make sure that a local
+# override file or an exported secrets file is never committed by mistake.
+secrets.json
+appsettings.*.local.json
+appsettings.Local.json
+*.pfx
+*.key
+.env
+.env.*
+
+# ---------- Local databases ----------
+*.mdf
+*.ldf
+*.db
+*.sqlite
+
+# ---------- OS ----------
+Thumbs.db
+.DS_Store
