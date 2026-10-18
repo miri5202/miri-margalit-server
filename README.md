@@ -126,6 +126,17 @@ dotnet ef database update        -p WorkshopHub.Data -s WorkshopHub.API
 dotnet ef database drop --force  -p WorkshopHub.Data -s WorkshopHub.API    # איפוס: בהרצה הבאה הכול נוצר מחדש
 ```
 
+## האתר המפורסם
+
+המערכת מפורסמת גם כאתר חי: **http://workshophub.runasp.net** (Swagger: ‏`/swagger`).
+השרת (ASP.NET Core) ובסיס נתונים SQL Server מתארחים ב-MonsterASP.NET, והשרת מגיש גם את הלקוח – כך שהלקוח וה-API יושבים באותה כתובת, בלי CORS.
+
+איך זה בנוי:
+- **פריסה מ-GitHub:** האחסון מושך את ה-repository הזה ומריץ `dotnet publish` על `WorkshopHub.API`.
+- **הלקוח:** נבנה ב-repository של הלקוח עם `npm run build:site`, והקבצים שנוצרים נמצאים ב-`WorkshopHub.API/wwwroot`. כשהתיקייה קיימת, ‏`Program.cs` מגיש ממנה את הקבצים (`UseDefaultFiles` + `UseStaticFiles`). קוד המקור של הלקוח נמצא ב-repository שלו.
+- **סודות:** סיסמת בסיס הנתונים ומפתח ה-JWT לא נמצאים ב-repo. הם מוגדרים כ**משתני סביבה** בלוח הבקרה של האחסון (`ConnectionStrings__Default`, ‏`Jwt__Key` – ה-`__` מייצג `:`), ו-.NET קורא אותם אוטומטית. רשימת ההגדרות המלאה: `appsettings.Production.example.json`.
+- בעלייה הראשונה השרת מחיל את ה-migrations ויוצר את נתוני הדמו בעצמו, בדיוק כמו בהרצה המקומית.
+
 ## משתמשי דמו
 
 נוצרים אוטומטית בסביבת הפיתוח (`WorkshopHub.Data/Seed`). אלה פרטי הדגמה בלבד; בבסיס הנתונים נשמר רק גיבוב הסיסמה.

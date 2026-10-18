@@ -46,3 +46,8 @@ appsettings.Local.json
 # ---------- OS ----------
 Thumbs.db
 .DS_Store
+
+# ---------- Deployment ----------
+# Production settings hold the hosted database password and the JWT key – never committed.
+# The template without secrets is appsettings.Production.example.json.
+appsettings.Production.json

@@ -228,14 +228,26 @@ try
     // 3. לוג לכל בקשה נכנסת
     app.UseMiddleware<RequestLoggingMiddleware>();
 
-    if (app.Environment.IsDevelopment())
+    // Swagger: תמיד בפיתוח. בשרת המפורסם רק אם Swagger:Enabled=true (כדי שאפשר יהיה להציג את ה-API)
+    if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
     {
         app.UseSwagger();
         app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "WorkshopHub API v1"));
     }
-    else
+
+    // הפניה ל-HTTPS: ברירת המחדל – בכל סביבה חוץ מפיתוח. אפשר לכבות (Https:Redirect=false)
+    // באחסון שעדיין אין בו תעודת HTTPS, אחרת כל בקשה תופנה לכתובת שלא עונה.
+    if (app.Configuration.GetValue("Https:Redirect", !app.Environment.IsDevelopment()))
     {
         app.UseHttpsRedirection();
+    }
+
+    // האתר המפורסם: אם קיימת תיקיית wwwroot (הלקוח אחרי npm run build), השרת מגיש גם אותו.
+    // כך הלקוח וה-API יושבים באותה כתובת, בלי CORS. בפיתוח התיקייה לא קיימת והשורות לא פועלות.
+    if (Directory.Exists(Path.Combine(app.Environment.ContentRootPath, "wwwroot")))
+    {
+        app.UseDefaultFiles();
+        app.UseStaticFiles();
     }
 
     app.UseCors("Client");
