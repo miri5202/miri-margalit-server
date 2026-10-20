@@ -131,6 +131,8 @@ dotnet ef database drop --force  -p WorkshopHub.Data -s WorkshopHub.API    # א�
 
 ## האתר המפורסם (Render)
 
+**האתר החי: https://workshophub-n5cy.onrender.com** ‏(Swagger: ‏[`/swagger`](https://workshophub-n5cy.onrender.com/swagger)). בתוכנית החינמית השירות "נרדם" אחרי 15 דקות בלי שימוש, והכניסה הראשונה אחרי זה לוקחת כדקה.
+
 השרת מפורסם בענן **Render** כ-Web Service מסוג Docker, לפי ה-`Dockerfile` שבשורש ה-repository: ‏Render מושך את ה-repository, בונה את ה-image (‏`dotnet publish` על `WorkshopHub.API`) ומריץ אותו.
 
 - **הלקוח:** נבנה ב-repository של הלקוח עם `npm run build:site`, והקבצים שנוצרים נמצאים ב-`WorkshopHub.API/wwwroot`. כשהתיקייה קיימת, ‏`Program.cs` מגיש ממנה את הקבצים (`UseDefaultFiles` + `UseStaticFiles`), כך שהלקוח וה-API יושבים באותה כתובת, בלי CORS. קוד המקור של הלקוח נמצא ב-repository שלו.
