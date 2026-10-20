@@ -15,15 +15,15 @@ using WorkshopHub.Tests.Helpers;
 namespace WorkshopHub.Tests.Concurrency;
 
 /// <summary>
-/// ההוכחה שהטיפול בתחרות על המשאב עובד – מול SQL Server אמיתי, עם DbContext נפרד לכל "בקשה".
+/// ההוכחה שהטיפול בתחרות על המשאב עובד – מול PostgreSQL אמיתי, עם DbContext נפרד לכל "בקשה".
 /// </summary>
-[Collection(SqlServerCollection.Name)]
+[Collection(PostgresCollection.Name)]
 [Trait("Category", "Concurrency")]
 public class SessionConcurrencyTests
 {
-    private readonly SqlServerFixture _database;
+    private readonly PostgresFixture _database;
 
-    public SessionConcurrencyTests(SqlServerFixture database)
+    public SessionConcurrencyTests(PostgresFixture database)
     {
         _database = database;
     }
@@ -48,7 +48,7 @@ public class SessionConcurrencyTests
         Assert.Equal(0, seenByFirst.SeatsTaken);
         Assert.Equal(0, seenBySecond.SeatsTaken);
         Assert.Equal(seenByFirst.RowVersion, seenBySecond.RowVersion);
-        var rowVersionBefore = seenByFirst.RowVersion.ToArray();
+        var rowVersionBefore = seenByFirst.RowVersion;
 
         // שניהם תופסים את המקום
         seenByFirst.SeatsTaken++;
@@ -61,7 +61,7 @@ public class SessionConcurrencyTests
         // ...והשני נכשל: ה-UPDATE שלו כולל WHERE RowVersion = <הערך שקרא>, והערך כבר השתנה
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => secondContext.SaveChangesAsync());
 
-        // בבסיס הנתונים: מקום אחד תפוס – לא שניים – וה-rowversion התקדם
+        // בבסיס הנתונים: מקום אחד תפוס – לא שניים – וה-xmin התקדם
         await using var verifyContext = _database.CreateContext();
         var stored = await verifyContext.Sessions.AsNoTracking().SingleAsync(s => s.Id == sessionId);
 
@@ -185,7 +185,7 @@ public class SessionConcurrencyTests
         var userIds = await _database.SeedUsersAsync(1);
 
         // המנהלת טוענת את טופס העריכה ומקבלת את ה-RowVersion הנוכחי
-        byte[] rowVersionLoadedByAdmin;
+        uint rowVersionLoadedByAdmin;
         DateTime startsAtUtc;
         await using (var context = _database.CreateContext())
         {

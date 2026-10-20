@@ -37,7 +37,7 @@ public class MappingProfileTests
             Capacity = 10,
             SeatsTaken = 10,
             WaitlistCount = 2,
-            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 7, 209 }
+            RowVersion = 2001
         };
 
         var response = TestMapper.Instance.Map<SessionResponse>(session);
@@ -98,7 +98,7 @@ public class MappingProfileTests
     [Fact]
     public void SessionUpdateRequest_MapsOntoExistingSession_WithoutOverwritingCountersOrRowVersion()
     {
-        var storedRowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 7, 210 };
+        const uint storedRowVersion = 2002;
         var session = new Session { Id = 10, Capacity = 5, SeatsTaken = 4, WaitlistCount = 1, RowVersion = storedRowVersion };
 
         TestMapper.Instance.Map(
@@ -108,7 +108,7 @@ public class MappingProfileTests
                 DurationMinutes = 90,
                 Location = "אולם הרצאות",
                 Capacity = 8,
-                RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 7, 209 }
+                RowVersion = 2001
             },
             session);
 
@@ -116,7 +116,7 @@ public class MappingProfileTests
         Assert.Equal("אולם הרצאות", session.Location);
         Assert.Equal(4, session.SeatsTaken);
         Assert.Equal(1, session.WaitlistCount);
-        Assert.Same(storedRowVersion, session.RowVersion);
+        Assert.Equal(storedRowVersion, session.RowVersion);
     }
 
     [Fact]

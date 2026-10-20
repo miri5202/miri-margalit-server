@@ -13,11 +13,11 @@ WorkshopHub היא מערכת הרשמה לסדנאות. כל סדנה (למשל
 
 **המשאב המוגבל** הוא מקום במפגש (`Session`). **התחרות** קורית בפעולת ההרשמה, `POST /api/sessions/{sessionId}/registrations`: נשאר מקום אחד, ושתי משתתפות לוחצות "הרשמה" באותו רגע. שתי הבקשות קוראות את המפגש כשיש בו עדיין מקום פנוי, שתיהן עוברות את הבדיקה – ובלי הגנה, שתיהן היו מקבלות אישור על אותו מקום.
 
-**איך המערכת מגיבה:** המערכת משתמשת ב-optimistic concurrency. לישות `Session` יש concurrency token – העמודה `RowVersion` מסוג `rowversion`, ש-SQL Server מעדכן בכל שינוי בשורה. EF Core מוסיף את הערך שנקרא לתנאי ה-`WHERE` של ה-`UPDATE`, כך שהבקשה השנייה לא מוצאת שורה לעדכן. כל השמירה שלה מתבטלת (גם ההרשמה שניסתה להוסיף – הכול באותה טרנזקציה), ב-EF Core נזרקת `DbUpdateConcurrencyException`, והלקוח מקבל **409 Conflict** עם הקוד `concurrency_conflict` וההודעה "המקום נתפס על ידי משתתפת אחרת ממש ברגע זה. רענני את הרשימה ונסי שוב". ההתנגשות נכתבת ללוג ברמת Warning.
+**איך המערכת מגיבה:** המערכת משתמשת ב-optimistic concurrency. לישות `Session` יש concurrency token – המאפיין `RowVersion`, שממופה לעמודת המערכת `xmin` ש-PostgreSQL מעדכן בכל שינוי בשורה. EF Core מוסיף את הערך שנקרא לתנאי ה-`WHERE` של ה-`UPDATE`, כך שהבקשה השנייה לא מוצאת שורה לעדכן. כל השמירה שלה מתבטלת (גם ההרשמה שניסתה להוסיף – הכול באותה טרנזקציה), ב-EF Core נזרקת `DbUpdateConcurrencyException`, והלקוח מקבל **409 Conflict** עם הקוד `concurrency_conflict` וההודעה "המקום נתפס על ידי משתתפת אחרת ממש ברגע זה. רענני את הרשימה ונסי שוב". ההתנגשות נכתבת ללוג ברמת Warning.
 
 ### הפרטים
 
-**ה-token מוגדר בקוד** – `WorkshopHub.Core/Entities/Session.cs` (התכונה `[Timestamp]`) ו-`WorkshopHub.Data/Configurations/SessionConfiguration.cs` (`IsRowVersion()`).
+**ה-token מוגדר בקוד** – `WorkshopHub.Core/Entities/Session.cs` (מאפיין `uint` עם התכונה `[Timestamp]`) ו-`WorkshopHub.Data/Configurations/SessionConfiguration.cs` (`IsRowVersion()`). ‏Npgsql ממפה מאפיין `uint` שמסומן כ-RowVersion לעמודת המערכת `xmin` – הדרך הראשונה שבנספח ה-PostgreSQL של המדריך.
 
 **המסלול של ההתנגשות בין השכבות:**
 
@@ -41,7 +41,7 @@ WorkshopHub היא מערכת הרשמה לסדנאות. כל סדנה (למשל
 
 ### ההוכחה שזה עובד
 
-`WorkshopHub.Tests/Concurrency/SessionConcurrencyTests.cs` – רץ מול SQL Server אמיתי (rowversion הוא מנגנון של בסיס הנתונים, ובסיס נתונים בזיכרון לא היה מוכיח כלום):
+`WorkshopHub.Tests/Concurrency/SessionConcurrencyTests.cs` – רץ מול PostgreSQL אמיתי (xmin הוא מנגנון של בסיס הנתונים, ובסיס נתונים בזיכרון לא היה מוכיח כלום):
 
 - **`TwoDbContexts_ChangeTheSameSession_FirstSaveSucceeds_SecondThrowsDbUpdateConcurrencyException`** – הבדיקה שנדרשת במדריך: שני `DbContext` נפרדים קוראים את אותו מפגש, שניהם משנים אותו, הראשון שומר בהצלחה והשני מקבל חריגה.
 - `TwoUsers_RegisterForTheLastSeatAtTheSameMoment_ExactlyOneIsConfirmed_TheOtherGetsConflict` – אותו תרחיש דרך שכבת ה-Service, עם "שער" שמבטיח ששתי הבקשות קראו את המפגש לפני שאחת מהן שמרה.
@@ -88,7 +88,9 @@ WorkshopHub.sln
 ### מה צריך
 
 - ‏‎.NET SDK 8‏ ומעלה (הפרויקט מכוון ל-`net8.0`).
-- **SQL Server LocalDB** – מותקן יחד עם Visual Studio. אפשר גם SQL Server Express או התקנה מלאה (ראו למטה).
+- **PostgreSQL** 14 ומעלה. הדרך המהירה מקומית היא Docker, בלי התקנה:
+  `docker run --name pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:16`
+  אפשר גם PostgreSQL מותקן, או בסיס נתונים בענן (ראו "שרת PostgreSQL אחר").
 
 ### שלושה צעדים
 
@@ -103,16 +105,17 @@ dotnet run --project WorkshopHub.API
 #    http://localhost:5080/swagger
 ```
 
-זה הכול. **אין צורך ליצור את בסיס הנתונים ידנית:** בעלייה הראשונה (בסביבת Development) השרת מחיל את ה-migrations – מה שיוצר את בסיס הנתונים `WorkshopHubDb` – ומכניס נתוני דמו: משתמשים, 10 סדנאות, 25 מפגשים והרשמות. ההתנהגות נשלטת על ידי `Database:ApplyMigrationsOnStartup` ו-`Database:SeedDemoData` ב-`appsettings.Development.json`.
+זה הכול. **אין צורך ליצור את בסיס הנתונים ידנית:** בעלייה הראשונה (בסביבת Development) השרת מחיל את ה-migrations – מה שיוצר את בסיס הנתונים `workshophub` – ומכניס נתוני דמו: משתמשים, 10 סדנאות, 25 מפגשים והרשמות. ההתנהגות נשלטת על ידי `Database:ApplyMigrationsOnStartup` ו-`Database:SeedDemoData` ב-`appsettings.Development.json`.
 
 אם ה-`Jwt:Key` חסר, השרת לא עולה ומדפיס הודעה שמסבירה איך להגדיר אותו.
 
-### שרת SQL אחר
+### שרת PostgreSQL אחר
 
-ה-connection string של סביבת הפיתוח נמצא ב-`appsettings.Development.json` ומצביע על LocalDB עם Windows Authentication (ולכן אין בו סיסמה). כדי לעבוד מול שרת אחר, דורסים אותו ב-User Secrets – בלי לגעת בקבצים:
+ה-connection string של סביבת הפיתוח נמצא ב-`appsettings.Development.json` ומצביע על PostgreSQL מקומי (`localhost:5432`, משתמש וסיסמה `postgres` – ברירת המחדל של קונטיינר הפיתוח, לא סוד). כדי לעבוד מול שרת אחר, דורסים אותו ב-User Secrets – בלי לגעת בקבצים. אפשר לתת אותו בצורה של Npgsql או בצורת URL כמו ש-Render מציג:
 
 ```bash
-dotnet user-secrets set "ConnectionStrings:Default" "Server=localhost\SQLEXPRESS;Database=WorkshopHubDb;Trusted_Connection=True;TrustServerCertificate=True" --project WorkshopHub.API
+dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5432;Database=workshophub;Username=postgres;Password=<password>" --project WorkshopHub.API
+dotnet user-secrets set "ConnectionStrings:Default" "postgresql://user:password@host:5432/workshophub" --project WorkshopHub.API
 ```
 
 ### Migrations
@@ -131,7 +134,7 @@ dotnet ef database drop --force  -p WorkshopHub.Data -s WorkshopHub.API    # א�
 השרת מפורסם בענן **Render** כ-Web Service מסוג Docker, לפי ה-`Dockerfile` שבשורש ה-repository: ‏Render מושך את ה-repository, בונה את ה-image (‏`dotnet publish` על `WorkshopHub.API`) ומריץ אותו.
 
 - **הלקוח:** נבנה ב-repository של הלקוח עם `npm run build:site`, והקבצים שנוצרים נמצאים ב-`WorkshopHub.API/wwwroot`. כשהתיקייה קיימת, ‏`Program.cs` מגיש ממנה את הקבצים (`UseDefaultFiles` + `UseStaticFiles`), כך שהלקוח וה-API יושבים באותה כתובת, בלי CORS. קוד המקור של הלקוח נמצא ב-repository שלו.
-- **בסיס הנתונים:** ‏SQL Server מתארח (‏Render מציע רק PostgreSQL, והפרויקט בנוי על SQL Server ועל `rowversion`).
+- **בסיס הנתונים:** ‏**Render PostgreSQL**. השירות מתחבר אליו בכתובת הפנימית (Internal Database URL), ש-`Program.cs` ממיר לצורה ש-Npgsql מבין.
 - **סודות:** לא נמצאים ב-repo. הם מוגדרים כ**משתני סביבה** ב-Render, ו-.NET קורא אותם אוטומטית (`__` מייצג `:`):
 
 | משתנה | תפקיד |
@@ -213,7 +216,7 @@ dotnet test
 63 בדיקות:
 
 - **בדיקות יחידה** (`WorkshopHub.Tests/Unit`) – xUnit + Moq על שכבת ה-Service, עם repositories מדומים. `RegistrationServiceTests` בודק את הלוגיקה של המשאב המוגבל: המקרה התקין (המקום נתפס), והמקרים שנדחים (מפגש מלא, התנגשות עם בקשה אחרת, הרשמה כפולה).
-- **בדיקות concurrency** (`WorkshopHub.Tests/Concurrency`) – מול SQL Server אמיתי. ה-fixture יוצר בסיס נתונים זמני בשם ייחודי ב-LocalDB, מחיל עליו את ה-migrations של הפרויקט, ומוחק אותו בסיום. לשרת אחר: משתנה הסביבה `WORKSHOPHUB_TEST_SQLSERVER` (connection string בלי שם בסיס נתונים).
+- **בדיקות concurrency** (`WorkshopHub.Tests/Concurrency`) – מול PostgreSQL אמיתי. ה-fixture יוצר schema זמני בשם ייחודי, מחיל עליו את ה-migrations של הפרויקט, ומוחק אותו בסיום – כך מספיקה הרשאה של בעלת בסיס הנתונים, גם בשירות מנוהל בענן. ברירת המחדל היא PostgreSQL מקומי; לשרת אחר: משתנה הסביבה `WORKSHOPHUB_TEST_POSTGRES` (connection string רגיל או בצורת URL).
 
 להרצה של חלק מהבדיקות: `dotnet test --filter "Category!=Concurrency"` או `dotnet test --filter "Category=Concurrency"`.
 
@@ -240,7 +243,7 @@ dotnet test
 | מקור | מה יש בו |
 |---|---|
 | `appsettings.json` | ערכים שאינם סודיים ומשותפים לכל הסביבות (Issuer, Audience ותוקף ה-JWT) |
-| `appsettings.Development.json` | הגדרות סביבת הפיתוח: connection string ל-LocalDB (Windows Authentication, בלי סיסמה), CORS ללקוח, לוג ברמת Debug, אתחול אוטומטי של בסיס הנתונים |
+| `appsettings.Development.json` | הגדרות סביבת הפיתוח: connection string ל-PostgreSQL מקומי (סיסמת ברירת המחדל של קונטיינר הפיתוח), CORS ללקוח, לוג ברמת Debug, אתחול אוטומטי של בסיס הנתונים |
 | **User Secrets** | `Jwt:Key` (חובה), ובמידת הצורך `ConnectionStrings:Default` |
 
 **אין אף סוד בקוד או ב-repo.** ההגדרות נקראות דרך `IOptions<JwtSettings>` ו-`IOptions<DatabaseSettings>`, עם ולידציה בעליית השרת (`ValidateDataAnnotations().ValidateOnStart()`).

@@ -1,5 +1,5 @@
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using WorkshopHub.Core.Entities;
 using WorkshopHub.Core.Enums;
 using WorkshopHub.Data;
@@ -7,26 +7,28 @@ using WorkshopHub.Data;
 namespace WorkshopHub.Tests.Concurrency;
 
 /// <summary>
-/// בסיס נתונים אמיתי לבדיקות ה-concurrency. rowversion הוא מנגנון של SQL Server עצמו, ולכן בדיקה שמוכיחה
-/// אותו חייבת לרוץ מול SQL Server – בסיס נתונים בזיכרון לא מעדכן rowversion ולא היה מוכיח כלום.
+/// בסיס נתונים אמיתי לבדיקות ה-concurrency. ה-token הוא xmin – עמודת מערכת ש-PostgreSQL עצמו מעדכן,
+/// ולכן בדיקה שמוכיחה אותו חייבת לרוץ מול PostgreSQL – בסיס נתונים בזיכרון לא מעדכן xmin ולא היה מוכיח כלום.
 ///
-/// ה-fixture יוצר בסיס נתונים זמני בשם ייחודי, מחיל עליו את ה-migrations האמיתיות של הפרויקט,
-/// ומוחק אותו בסיום. ברירת המחדל היא LocalDB; אפשר לכוון לשרת אחר עם משתנה הסביבה
-/// WORKSHOPHUB_TEST_SQLSERVER (connection string בלי שם בסיס נתונים).
+/// ה-fixture יוצר schema זמני בשם ייחודי (ולא בסיס נתונים שלם – כך מספיקה הרשאה של בעלת בסיס הנתונים,
+/// גם בשירות מנוהל בענן), מחיל עליו את ה-migrations האמיתיות של הפרויקט, ומוחק אותו בסיום.
+/// ברירת המחדל היא PostgreSQL מקומי (localhost:5432, משתמש postgres); אפשר לכוון לשרת אחר עם משתנה
+/// הסביבה WORKSHOPHUB_TEST_POSTGRES (connection string רגיל או בצורת URL: postgresql://user:password@host/db).
 /// </summary>
-public sealed class SqlServerFixture : IAsyncLifetime
+public sealed class PostgresFixture : IAsyncLifetime
 {
-    private const string DefaultServer = @"Server=(localdb)\MSSQLLocalDB;Trusted_Connection=True;TrustServerCertificate=True";
+    private const string DefaultServer = "Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=postgres";
 
-    public SqlServerFixture()
+    private readonly string _serverConnectionString;
+    private readonly string _schema = $"tests_{Guid.NewGuid():N}";
+
+    public PostgresFixture()
     {
-        var server = Environment.GetEnvironmentVariable("WORKSHOPHUB_TEST_SQLSERVER");
+        var server = Environment.GetEnvironmentVariable("WORKSHOPHUB_TEST_POSTGRES");
+        _serverConnectionString = PostgresConnectionString.Normalize(string.IsNullOrWhiteSpace(server) ? DefaultServer : server)!;
 
-        var builder = new SqlConnectionStringBuilder(string.IsNullOrWhiteSpace(server) ? DefaultServer : server)
-        {
-            InitialCatalog = $"WorkshopHub_Tests_{Guid.NewGuid():N}"
-        };
-
+        // כל הטבלאות (וגם טבלת ההיסטוריה של ה-migrations) נוצרות ב-schema הראשון ב-search path
+        var builder = new NpgsqlConnectionStringBuilder(_serverConnectionString) { SearchPath = _schema };
         ConnectionString = builder.ConnectionString;
     }
 
@@ -36,18 +38,24 @@ public sealed class SqlServerFixture : IAsyncLifetime
     /// DbContext חדש ונפרד בכל קריאה – בדיוק כמו שכל בקשת HTTP מקבלת DbContext משלה (scoped).
     /// </summary>
     public AppDbContext CreateContext() =>
-        new(new DbContextOptionsBuilder<AppDbContext>().UseSqlServer(ConnectionString).Options);
+        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(ConnectionString).Options);
 
     public async Task InitializeAsync()
     {
+        await ExecuteOnServerAsync($"CREATE SCHEMA \"{_schema}\"");
+
         await using var context = CreateContext();
         await context.Database.MigrateAsync();
     }
 
-    public async Task DisposeAsync()
+    public Task DisposeAsync() => ExecuteOnServerAsync($"DROP SCHEMA IF EXISTS \"{_schema}\" CASCADE");
+
+    private async Task ExecuteOnServerAsync(string sql)
     {
-        await using var context = CreateContext();
-        await context.Database.EnsureDeletedAsync();
+        await using var connection = new NpgsqlConnection(_serverConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
     }
 
     /// <summary>יוצר סדנה עם מפגש עתידי אחד ומחזיר את מזהה המפגש.</summary>
@@ -99,8 +107,8 @@ public sealed class SqlServerFixture : IAsyncLifetime
 }
 
 /// <summary>כל בדיקות ה-concurrency חולקות את אותו בסיס נתונים זמני.</summary>
-[CollectionDefinition(SqlServerCollection.Name)]
-public sealed class SqlServerCollection : ICollectionFixture<SqlServerFixture>
+[CollectionDefinition(PostgresCollection.Name)]
+public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
 {
-    public const string Name = "SQL Server";
+    public const string Name = "PostgreSQL";
 }

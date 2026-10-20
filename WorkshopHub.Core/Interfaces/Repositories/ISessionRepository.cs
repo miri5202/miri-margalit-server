@@ -21,7 +21,7 @@ public interface ISessionRepository
     /// קובע איזה RowVersion ייבדק בזמן השמירה. משמש כשהלקוח מחזיר את ה-token שקיבל כשטען את המפגש:
     /// כך העדכון נבדק מול מה שהלקוח ראה, ולא מול מה שהשרת קרא כרגע.
     /// </summary>
-    void SetOriginalRowVersion(Session session, byte[] rowVersion);
+    void SetOriginalRowVersion(Session session, uint rowVersion);
 
     Task AddAsync(Session session, CancellationToken cancellationToken = default);
 

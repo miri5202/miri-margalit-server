@@ -5,6 +5,7 @@ using WorkshopHub.Core.Entities;
 using WorkshopHub.Core.Enums;
 using WorkshopHub.Core.Interfaces.Repositories;
 using WorkshopHub.Data.Extensions;
+using WorkshopHub.Data.Querying;
 
 namespace WorkshopHub.Data.Repositories;
 
@@ -27,8 +28,10 @@ public class WorkshopRepository : IWorkshopRepository
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var term = query.Search.Trim();
-            workshops = workshops.Where(w => w.Title.Contains(term) || w.InstructorName.Contains(term));
+            var pattern = LikePattern.Containing(query.Search.Trim());
+            workshops = workshops.Where(w =>
+                EF.Functions.ILike(w.Title, pattern, LikePattern.EscapeCharacter) ||
+                EF.Functions.ILike(w.InstructorName, pattern, LikePattern.EscapeCharacter));
         }
 
         if (query.CategoryId is int categoryId)

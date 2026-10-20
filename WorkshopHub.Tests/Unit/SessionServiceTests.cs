@@ -17,7 +17,7 @@ public class SessionServiceTests
     private const int WorkshopId = 3;
 
     private static readonly DateTime Now = new(2026, 11, 1, 10, 0, 0, DateTimeKind.Utc);
-    private static readonly byte[] ClientRowVersion = { 0, 0, 0, 0, 0, 0, 7, 209 };
+    private const uint ClientRowVersion = 2001;
 
     private readonly Mock<ISessionRepository> _sessions = new();
     private readonly Mock<IWorkshopRepository> _workshops = new();
@@ -265,7 +265,7 @@ public class SessionServiceTests
         Capacity = capacity,
         SeatsTaken = seatsTaken,
         WaitlistCount = waitlistCount,
-        RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 7, 210 }
+        RowVersion = 2002
     };
 
     private static SessionCreateRequest NewCreateRequest(DateTime startsAtUtc, int capacity) => new()

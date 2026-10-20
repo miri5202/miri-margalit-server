@@ -69,8 +69,10 @@ try
     // DbContext הוא scoped: מופע אחד לכל בקשת HTTP. כל ה-repositories של אותה בקשה חולקים אותו,
     // ולכן SaveChanges אחד שומר את כל השינויים שלהם בטרנזקציה אחת. הוא אינו thread-safe,
     // ולכן אסור שישותף בין בקשות.
-    builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+    // בסיס הנתונים הוא PostgreSQL (ספריית Npgsql). ה-connection string יכול להגיע גם בצורת URL
+    // (postgresql://user:password@host/db) כמו שמציג Render – הוא מומר לצורה ש-Npgsql מבין.
+    var connectionString = PostgresConnectionString.Normalize(builder.Configuration.GetConnectionString("Default"));
+    builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 
     // Repositories ו-UnitOfWork הם scoped כי הם מחזיקים את ה-DbContext, שהוא scoped
     builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -203,7 +205,7 @@ try
     var databaseSettings = app.Services.GetRequiredService<IOptions<DatabaseSettings>>().Value;
     if (databaseSettings.ApplyMigrationsOnStartup || databaseSettings.SeedDemoData)
     {
-        if (string.IsNullOrWhiteSpace(app.Configuration.GetConnectionString("Default")))
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
                 "ConnectionStrings:Default is missing. Set it in appsettings.Development.json or with: " +
@@ -211,8 +213,8 @@ try
         }
 
         // אבחון: לפני המיגרציות בודקים אם שרת בסיס הנתונים בכלל נגיש ברשת (DNS + פורט),
-        // כדי שבענן תהיה הודעה ברורה במקום חריגת רשת כללית של SqlClient
-        await LogDatabaseReachabilityAsync(app.Configuration.GetConnectionString("Default")!, startupLogger);
+        // כדי שבענן תהיה הודעה ברורה במקום חריגת רשת כללית
+        await LogDatabaseReachabilityAsync(connectionString, startupLogger);
 
         // IDbInitializer הוא scoped (הוא מחזיק DbContext), ולכן פותחים scope ידני – אין כאן בקשת HTTP
         await using var scope = app.Services.CreateAsyncScope();
@@ -268,10 +270,9 @@ try
     // לא כותב את ה-connection string עצמו – יש בו סיסמה.
     static async Task LogDatabaseReachabilityAsync(string connectionString, NLog.Logger logger)
     {
-        var dataSource = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).DataSource;
-        var hostAndPort = dataSource.Replace("tcp:", string.Empty, StringComparison.OrdinalIgnoreCase).Split(',');
-        var host = hostAndPort[0].Split('\\')[0].Trim();
-        var port = hostAndPort.Length > 1 && int.TryParse(hostAndPort[1].Trim(), out var parsedPort) ? parsedPort : 1433;
+        var settings = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+        var host = settings.Host?.Split(',')[0].Trim() ?? "localhost";
+        var port = settings.Port;
 
         try
         {

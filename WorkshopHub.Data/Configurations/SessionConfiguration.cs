@@ -12,15 +12,15 @@ public class SessionConfiguration : IEntityTypeConfiguration<Session>
         {
             // קו ההגנה האחרון: גם אם יהיה באג בקוד, בסיס הנתונים עצמו לא יסכים לשמור
             // יותר נרשמות ממקומות.
-            table.HasCheckConstraint("CK_Sessions_Capacity_Positive", "[Capacity] > 0");
-            table.HasCheckConstraint("CK_Sessions_SeatsTaken_Range", "[SeatsTaken] >= 0 AND [SeatsTaken] <= [Capacity]");
-            table.HasCheckConstraint("CK_Sessions_WaitlistCount_NonNegative", "[WaitlistCount] >= 0");
+            table.HasCheckConstraint("CK_Sessions_Capacity_Positive", "\"Capacity\" > 0");
+            table.HasCheckConstraint("CK_Sessions_SeatsTaken_Range", "\"SeatsTaken\" >= 0 AND \"SeatsTaken\" <= \"Capacity\"");
+            table.HasCheckConstraint("CK_Sessions_WaitlistCount_NonNegative", "\"WaitlistCount\" >= 0");
         });
 
         builder.Property(s => s.Location).IsRequired().HasMaxLength(120);
 
-        // ה-concurrency token: עמודת rowversion ש-SQL Server מעדכן בכל שינוי בשורה.
-        // EF Core מוסיף אותה לתנאי ה-WHERE של כל UPDATE ו-DELETE על המפגש.
+        // ה-concurrency token: מאפיין uint שמסומן כ-RowVersion ממופה אצל Npgsql לעמודת המערכת xmin,
+        // ש-PostgreSQL מעדכן בכל שינוי בשורה. EF Core מוסיף אותה לתנאי ה-WHERE של כל UPDATE ו-DELETE על המפגש.
         builder.Property(s => s.RowVersion).IsRowVersion();
 
         builder.HasIndex(s => s.StartsAtUtc);

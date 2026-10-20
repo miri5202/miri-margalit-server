@@ -1,5 +1,5 @@
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using WorkshopHub.Core.Exceptions;
 using WorkshopHub.Core.Interfaces.Repositories;
 
@@ -7,10 +7,6 @@ namespace WorkshopHub.Data.Repositories;
 
 public class UnitOfWork : IUnitOfWork
 {
-    // קודי השגיאה של SQL Server להפרת אינדקס ייחודי / מפתח ייחודי
-    private const int SqlUniqueIndexViolation = 2601;
-    private const int SqlUniqueConstraintViolation = 2627;
-
     private readonly AppDbContext _context;
 
     public UnitOfWork(AppDbContext context)
@@ -41,5 +37,6 @@ public class UnitOfWork : IUnitOfWork
     }
 
     private static bool IsUniqueViolation(DbUpdateException exception) =>
-        exception.InnerException is SqlException { Number: SqlUniqueIndexViolation or SqlUniqueConstraintViolation };
+        // קוד השגיאה של PostgreSQL להפרת אינדקס ייחודי / אילוץ ייחודי (unique_violation)
+        exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 }

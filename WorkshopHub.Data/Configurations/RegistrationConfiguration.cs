@@ -24,7 +24,7 @@ public class RegistrationConfiguration : IEntityTypeConfiguration<Registration>
         // הרשמות שבוטלו לא נכללות, ולכן אפשר להירשם שוב אחרי ביטול.
         builder.HasIndex(r => new { r.SessionId, r.UserId })
             .IsUnique()
-            .HasFilter($"[Status] <> N'{nameof(RegistrationStatus.Cancelled)}'")
+            .HasFilter($"\"Status\" <> '{nameof(RegistrationStatus.Cancelled)}'")
             .HasDatabaseName("UX_Registrations_Session_User_Active");
 
         // משרת את שליפת "הממתינה הבאה בתור": לפי מפגש וסטטוס, בסדר ההצטרפות

@@ -22,30 +22,30 @@ namespace WorkshopHub.Data.Migrations
             migrationBuilder.AddColumn<int>(
                 name: "WaitlistCount",
                 table: "Sessions",
-                type: "int",
+                type: "integer",
                 nullable: false,
                 defaultValue: 0);
 
             migrationBuilder.AddColumn<DateTime>(
                 name: "PromotedAtUtc",
                 table: "Registrations",
-                type: "datetime2",
+                type: "timestamp with time zone",
                 nullable: true);
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_Sessions_Capacity_Positive",
                 table: "Sessions",
-                sql: "[Capacity] > 0");
+                sql: "\"Capacity\" > 0");
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_Sessions_SeatsTaken_Range",
                 table: "Sessions",
-                sql: "[SeatsTaken] >= 0 AND [SeatsTaken] <= [Capacity]");
+                sql: "\"SeatsTaken\" >= 0 AND \"SeatsTaken\" <= \"Capacity\"");
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_Sessions_WaitlistCount_NonNegative",
                 table: "Sessions",
-                sql: "[WaitlistCount] >= 0");
+                sql: "\"WaitlistCount\" >= 0");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Registrations_Session_Status_CreatedAt",
@@ -62,7 +62,7 @@ namespace WorkshopHub.Data.Migrations
                 table: "Registrations",
                 columns: new[] { "SessionId", "UserId" },
                 unique: true,
-                filter: "[Status] <> N'Cancelled'");
+                filter: "\"Status\" <> 'Cancelled'");
         }
 
         /// <inheritdoc />

@@ -35,8 +35,8 @@ public class SessionResponse : SessionSummaryResponse
 
     public bool IsFull { get; set; }
 
-    /// <summary>ה-concurrency token של המפגש (Base64). נדרש בעדכון מפגש.</summary>
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    /// <summary>ה-concurrency token של המפגש (הערך של xmin). נדרש בעדכון מפגש.</summary>
+    public uint RowVersion { get; set; }
 
     /// <summary>מזהה ההרשמה הפעילה של המשתמשת המחוברת למפגש הזה, אם יש.</summary>
     public int? MyRegistrationId { get; set; }

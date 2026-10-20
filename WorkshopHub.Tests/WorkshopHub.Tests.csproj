@@ -25,7 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\WorkshopHub.Core\WorkshopHub.Core.csproj" />
     <ProjectReference Include="..\WorkshopHub.Service\WorkshopHub.Service.csproj" />
-    <!-- Data נדרש רק לבדיקות ה-concurrency, שרצות מול SQL Server אמיתי עם שני DbContext נפרדים -->
+    <!-- Data נדרש רק לבדיקות ה-concurrency, שרצות מול PostgreSQL אמיתי עם שני DbContext נפרדים -->
     <ProjectReference Include="..\WorkshopHub.Data\WorkshopHub.Data.csproj" />
   </ItemGroup>
 

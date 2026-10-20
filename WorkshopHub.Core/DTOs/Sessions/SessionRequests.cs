@@ -26,9 +26,7 @@ public class SessionCreateRequest
 /// </summary>
 public class SessionUpdateRequest : SessionCreateRequest
 {
-    /// <summary>ה-concurrency token כפי שהתקבל ב-GET (Base64).</summary>
-    [Required(ErrorMessage = "חובה לשלוח את ה-rowVersion שהתקבל בטעינת המפגש.")]
-    [MinLength(8, ErrorMessage = "rowVersion אינו תקין.")]
-    [MaxLength(8, ErrorMessage = "rowVersion אינו תקין.")]
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    /// <summary>ה-concurrency token כפי שהתקבל ב-GET. ערך חסר (0) נדחה בוולידציה.</summary>
+    [Range(1, uint.MaxValue, ErrorMessage = "חובה לשלוח את ה-rowVersion שהתקבל בטעינת המפגש.")]
+    public uint RowVersion { get; set; }
 }

@@ -45,7 +45,7 @@
 | | |
 |---|---|
 | **טכנולוגיה** | ASP.NET Core Web API, ‏.NET 8 |
-| **בסיס נתונים** | SQL Server (LocalDB), ‏EF Core 8, Code-First |
+| **בסיס נתונים** | PostgreSQL (ספריית Npgsql), ‏EF Core 8, Code-First |
 | **לקוח** | React + Vite (repository נפרד) |
 | **ריצה** | מקומית בלבד, בלי ענן |
 
@@ -110,7 +110,7 @@ WorkshopHub.sln
 ├── WorkshopHub.Data      DbContext, הגדרות Fluent API, Repositories, Migrations, Seed
 ├── WorkshopHub.Service   לוגיקה עסקית, AutoMapper Profile, JWT, גיבוב סיסמאות
 ├── WorkshopHub.API       Controllers, Middleware, Program.cs, nlog.config
-└── WorkshopHub.Tests     xUnit + Moq, ובדיקות concurrency מול SQL Server אמיתי
+└── WorkshopHub.Tests     xUnit + Moq, ובדיקות concurrency מול PostgreSQL אמיתי
 ```
 
 ### כיוון התלויות
@@ -193,20 +193,21 @@ Workshop  * ───* Tag             many-to-many  (טבלת קישור Worksh
 ```csharp
 // WorkshopHub.Core/Entities/Session.cs
 [Timestamp]
-public byte[] RowVersion { get; set; }
+public uint RowVersion { get; set; }
 ```
 ```csharp
 // WorkshopHub.Data/Configurations/SessionConfiguration.cs
 builder.Property(s => s.RowVersion).IsRowVersion();
 ```
-- ב-SQL Server העמודה מסוג `rowversion`, ו**SQL Server מעדכן אותה אוטומטית** בכל שינוי בשורה.
+- ב-PostgreSQL אין `rowversion`. ‏Npgsql ממפה מאפיין `uint` שמסומן כ-RowVersion ל**עמודת המערכת `xmin`**, ש**PostgreSQL מעדכן אוטומטית** בכל שינוי בשורה – הדרך הראשונה שבנספח ה-PostgreSQL של המדריך.
+- לא נוצרת עמודה חדשה: `xmin` קיימת בכל טבלה ב-PostgreSQL.
 - `[Timestamp]` מגיע מ-`System.ComponentModel.DataAnnotations`, שהוא חלק מ-.NET עצמו, ולכן Core עדיין בלי חבילות חיצוניות.
 
 ### מה EF Core עושה עם ה-token
 כשרחל שומרת, EF Core שולח:
 ```sql
 UPDATE Sessions SET SeatsTaken = 1
-WHERE Id = 10 AND RowVersion = <הערך שרחל קראה>
+WHERE "Id" = 10 AND xmin = <הערך שרחל קראה>
 ```
 - **רחל ראשונה:** השורה נמצאת ומתעדכנת, וה-RowVersion משתנה.
 - **לאה שנייה:** ה-RowVersion שלאה קראה כבר לא קיים, **אף שורה לא מתעדכנת**, ו-EF Core זורק `DbUpdateConcurrencyException`.
@@ -349,12 +350,13 @@ WHERE Id = 10 AND RowVersion = <הערך שרחל קראה>
 | מקור | מה יש בו | נכנס ל-repo? |
 |---|---|---|
 | `appsettings.json` | Issuer, ‏Audience ותוקף ה-JWT, רמת לוג Info | ✅ |
-| `appsettings.Development.json` | connection string ל-LocalDB (**בלי סיסמה**, Windows Authentication), CORS ללקוח, רמת לוג Debug, אתחול אוטומטי של בסיס הנתונים | ✅ |
+| `appsettings.Development.json` | connection string ל-PostgreSQL מקומי (סיסמת ברירת המחדל של קונטיינר הפיתוח – לא סוד), CORS ללקוח, רמת לוג Debug, אתחול אוטומטי של בסיס הנתונים | ✅ |
+| **משתני סביבה ב-Render** | `ConnectionStrings__Default` ו-`Jwt__Key` של האתר החי | ❌ מוגדרים רק בלוח הבקרה של Render |
 | **User Secrets** | **`Jwt:Key`** – מפתח החתימה | ❌ נשמר מחוץ לתיקיית הפרויקט |
 
 - הגישה להגדרות דרך **`IOptions<JwtSettings>`** ו-**`IOptions<DatabaseSettings>`**.
 - ההגדרות נבדקות **בעליית השרת** (`ValidateDataAnnotations().ValidateOnStart()`). אם `Jwt:Key` חסר או קצר מ-32 תווים, השרת לא עולה ומדפיס הודעה שמסבירה מה לעשות.
-- **אין סוד בקוד ואין סוד ב-repo:** אין סיסמת בסיס נתונים (LocalDB עובד עם Windows Authentication), ומפתח ה-JWT נמצא רק ב-User Secrets.
+- **אין סוד בקוד ואין סוד ב-repo:** מפתח ה-JWT נמצא רק ב-User Secrets (פיתוח) ובמשתני הסביבה של Render (האתר החי), וכך גם הסיסמה של בסיס הנתונים בענן.
 
 ### Dependency Injection
 | Lifetime | מה | למה |
@@ -445,9 +447,9 @@ WHERE Id = 10 AND RowVersion = <הערך שרחל קראה>
 | ✅ ביטול כשיש ממתינה | הממתינה מקודמת, והמפגש נשאר מלא |
 | ❌ ביטול הרשמה של מישהי אחרת | 403 |
 
-### בדיקות Concurrency – מול SQL Server אמיתי (8)
-**למה לא עם Moq?** ‏`rowversion` הוא מנגנון של SQL Server עצמו. בדיקה מול נתונים מדומים או בסיס נתונים בזיכרון **לא הייתה מוכיחה כלום**.
-לכן כל הרצה יוצרת בסיס נתונים זמני ב-LocalDB, מחילה עליו את ה-migrations האמיתיות של הפרויקט, ומוחקת אותו בסוף.
+### בדיקות Concurrency – מול PostgreSQL אמיתי (8)
+**למה לא עם Moq?** ‏`xmin` הוא מנגנון של PostgreSQL עצמו. בדיקה מול נתונים מדומים או בסיס נתונים בזיכרון **לא הייתה מוכיחה כלום**.
+לכן כל הרצה יוצרת schema זמני בשם ייחודי, מחילה עליו את ה-migrations האמיתיות של הפרויקט, ומוחקת אותו בסוף. כל 8 הבדיקות עברו מול בסיס הנתונים של Render.
 
 | בדיקה | מה היא מוכיחה |
 |---|---|
@@ -505,7 +507,7 @@ node scripts/race-demo.mjs --users 8 --capacity 1
 ### Migrations
 | # | שם | מה היא יוצרת |
 |---|---|---|
-| 1 | `InitialCreate` | כל הטבלאות, הקשרים, ועמודת `RowVersion` מסוג `rowversion` |
+| 1 | `InitialCreate` | כל הטבלאות והקשרים; ה-`RowVersion` של המפגש ממופה ל-`xmin` |
 | 2 | `AddWaitlistAndIntegrityConstraints` | המונה `WaitlistCount`, השדה `PromotedAtUtc`, שלושת ה-CHECK constraints, והאינדקס הייחודי המסונן |
 
 ### Seed – נתוני הדמו
@@ -583,7 +585,7 @@ node scripts/race-demo.mjs --users 8 --capacity 1
 | **‏`DbUpdateConcurrencyException` → 409 עם הודעה ברורה** | ✅ | `UnitOfWork` → ‏`RegistrationService` → ‏409 |
 | ה-catch תופס חריגה ספציפית ולא `Exception` כללי | ✅ | `catch (DbUpdateConcurrencyException ex)` |
 | הבדיקה העסקית והשמירה באותה טרנזקציה | ✅ | סעיף 6 |
-| **בדיקה: שני DbContext, הראשון שומר, השני מקבל חריגה** | ✅ | `TwoDbContexts_...` – עוברת מול SQL Server אמיתי |
+| **בדיקה: שני DbContext, הראשון שומר, השני מקבל חריגה** | ✅ | `TwoDbContexts_...` – עוברת מול PostgreSQL אמיתי |
 | פסקה ב-README: איזה משאב, איפה התחרות, איך המערכת מגיבה | ✅ | README של השרת |
 
 ### חלק ד – NLog
@@ -621,7 +623,7 @@ node scripts/race-demo.mjs --users 8 --capacity 1
 בונוסים שנוספו **על בסיס מלא**: רשימת המתנה עם קידום אוטומטי, הגנה על עריכת מנהלת עם RowVersion, ‏CHECK constraints, ‏race demo.
 
 ### הערות כנות – כדי שלא תופתעי
-1. **מסלול ה-500 לא הופעל בבדיקה חיה.** ה-Middleware כתוב ומתועד, אבל במהלך הבדיקות לא קרתה אף חריגה לא צפויה, ולכן לא ראינו בעיניים תשובת 500. אם הבודקת תבקש להדגים – אפשר לעצור את SQL Server ולשלוח בקשה.
+1. **מסלול ה-500 לא הופעל בבדיקה חיה.** ה-Middleware כתוב ומתועד, אבל במהלך הבדיקות לא קרתה אף חריגה לא צפויה, ולכן לא ראינו בעיניים תשובת 500. אם הבודקת תבקש להדגים – אפשר לעצור את PostgreSQL ולשלוח בקשה.
 2. **סיסמאות משתמשי הדמו כתובות בקוד** (`Data/Seed/DemoData.cs`). הן **לא סודות**: ההנחיות דורשות לפרסם אותן ב-README, והן קיימות רק בסביבת הפיתוח. בבסיס הנתונים נשמר רק הגיבוב. הסודות האמיתיים (מפתח JWT וסיסמת בסיס נתונים) לא נמצאים ב-repo.
 3. **AutoMapper כותב אזהרת רישיון** בעליית השרת. מגרסה 15 הספרייה מבקשת מפתח רישיון, אבל היא עובדת כרגיל גם בלעדיו. זה לא משפיע על הפרויקט, ומוסבר ב-README.
 
@@ -640,7 +642,7 @@ node scripts/race-demo.mjs --users 8 --capacity 1
 ת: ההנחיות דורשות optimistic. הוא גם מתאים יותר ל-web: לא נועלים שורות, אין המתנות ואין סכנת deadlock. ההתנגשות מזוהה בזמן השמירה ונדחית.
 
 **ש: מה זה concurrency token, ואיך הוא עובד אצלך?**
-ת: שדה שמשתנה בכל עדכון של השורה. אצלי זה `RowVersion` מסוג `rowversion` ש-SQL Server מעדכן לבד. EF Core מוסיף את הערך שנקרא לתנאי ה-WHERE של ה-UPDATE. אם מישהי שינתה את השורה בינתיים, אף שורה לא מתעדכנת ו-EF Core זורק `DbUpdateConcurrencyException`.
+ת: שדה שמשתנה בכל עדכון של השורה. אצלי זה `RowVersion`, שממופה לעמודת המערכת `xmin` ש-PostgreSQL מעדכן לבד. EF Core מוסיף את הערך שנקרא לתנאי ה-WHERE של ה-UPDATE. אם מישהי שינתה את השורה בינתיים, אף שורה לא מתעדכנת ו-EF Core זורק `DbUpdateConcurrencyException`.
 
 **ש: איפה בדיוק את תופסת את החריגה, ולמה לא ב-Service?**
 ת: ב-`UnitOfWork` שבשכבת ה-Data. ה-Service מפנה רק ל-Core ולא מכיר את EF Core, ולכן שכבת ה-Data מתרגמת את החריגה ל-`ConcurrencyConflictException` של Core. ה-Service תופס אותה, כותב Warning ומחזיר Conflict, וה-API הופך את זה ל-409.
@@ -649,10 +651,10 @@ node scripts/race-demo.mjs --users 8 --capacity 1
 ת: הבקשה עצמה תקינה. היא מתנגשת עם המצב הנוכחי של המשאב – וזו ההגדרה של 409.
 
 **ש: איך הוכחת שזה עובד?**
-ת: בבדיקה עם שני DbContext נפרדים מול SQL Server אמיתי: שניהם קוראים את אותו מפגש ומשנים אותו, הראשון שומר והשני מקבל `DbUpdateConcurrencyException`. בנוסף, 12 משתתפות נרשמות במקביל ל-3 מקומות, והמפגש אף פעם לא עובר את הקיבולת.
+ת: בבדיקה עם שני DbContext נפרדים מול PostgreSQL אמיתי: שניהם קוראים את אותו מפגש ומשנים אותו, הראשון שומר והשני מקבל `DbUpdateConcurrencyException`. בנוסף, 12 משתתפות נרשמות במקביל ל-3 מקומות, והמפגש אף פעם לא עובר את הקיבולת.
 
 **ש: למה הבדיקה הזו לא רצה עם Moq?**
-ת: כי `rowversion` הוא מנגנון של SQL Server. בדיקה מול נתונים מדומים לא מוכיחה שבסיס הנתונים באמת דוחה את השמירה השנייה.
+ת: כי `xmin` הוא מנגנון של PostgreSQL. בדיקה מול נתונים מדומים לא מוכיחה שבסיס הנתונים באמת דוחה את השמירה השנייה.
 
 **ש: למה הוספת `WaitlistCount` לשורת המפגש?**
 ת: כדי שגם הצטרפות לרשימת ההמתנה תשנה את שורת המפגש. כך היא מתנגשת עם ביטול שקורה באותו רגע, ולא יכול להיווצר מצב שמשתתפת ממתינה בזמן שיש מקום פנוי.
@@ -661,7 +663,7 @@ node scripts/race-demo.mjs --users 8 --capacity 1
 ת: ה-Singleton נוצר פעם אחת לכל חיי האפליקציה. אם הוא מחזיק DbContext, הוא משתמש באותו DbContext לכל הבקשות. ה-DbContext לא thread-safe והמצב שלו מתיישן. הפעלתי `ValidateScopes` כדי שהשרת לא יעלה אם יש טעות כזו.
 
 **ש: איפה הסודות שלך?**
-ת: מפתח ה-JWT ב-User Secrets, מחוץ לתיקיית הפרויקט. ה-connection string הוא ל-LocalDB עם Windows Authentication, ולכן אין בו סיסמה.
+ת: מפתח ה-JWT ב-User Secrets, מחוץ לתיקיית הפרויקט. באתר החי ה-connection string ומפתח ה-JWT מוגדרים כמשתני סביבה ב-Render, ולא נמצאים ב-repo.
 
 **ש: מה זה CorrelationId ולמה צריך אותו?**
 ת: מזהה ייחודי לכל בקשה. הוא מופיע בכל שורת לוג של הבקשה ובכל תשובת שגיאה, כך שאפשר לשחזר בקשה שלמה מתוך לוג משותף.
@@ -695,15 +697,18 @@ node scripts/race-demo.mjs --users 8 --capacity 1
 |---|---|
 | רעיון: הרשמה לסדנאות עם מכסת מקומות ורשימת המתנה | המשאב (מקום במפגש) ברור, והתחרות עליו טבעית |
 | ‏.NET 8 + ‏EF Core 8 | תואם לחבילות שכבר היו מותקנות במחשב |
-| ‏SQL Server ‏LocalDB | מותקן במחשב, ויש לו `rowversion` מובנה בדיוק כמו בדוגמה שבהנחיות |
-| Optimistic concurrency עם `rowversion` על `Session` | דרישת ההנחיות |
+| ‏PostgreSQL | מתאים לפרסום ב-Render, שמציע בסיס נתונים PostgreSQL מנוהל. ההנחיות מאפשרות SQL Server או PostgreSQL |
+| Optimistic concurrency עם `xmin` על `Session` | דרישת ההנחיות; `xmin` הוא הדרך הראשונה בנספח ה-PostgreSQL |
+| חיפוש עם `ILIKE` | ב-PostgreSQL ‏`LIKE` רגיש לאותיות גדולות וקטנות |
+| כל התאריכים ב-UTC (ValueConverter) | ‏Npgsql שומר `timestamptz` ומקבל רק תאריכי UTC |
+| פרסום ב-Render עם Docker | ‏Render לא מריץ .NET ישירות; ה-`Dockerfile` בונה ומריץ את ה-API |
 | התרגום של `DbUpdateConcurrencyException` נעשה ב-Data | כדי שה-Service לא יכיר את EF Core |
 | `Result` במקום חריגות למצבים צפויים | ה-Service מחליט מה קרה, וה-Controller רק מתרגם לסטטוס |
 | `WaitlistCount` על שורת המפגש | כדי שכל פעולה על הרשמות תתנגש על אותו token |
 | קידום מרשימת ההמתנה באותה שמירה של הביטול | המקום לא "נעלם" ולא מוכפל |
 | ‏`rowVersion` חוזר מהלקוח בעריכת מפגש | עריכה של מנהלת לא דורסת הרשמה שקרתה בינתיים |
 | ‏CHECK constraints ואינדקס ייחודי מסונן | קו הגנה אחרון בבסיס הנתונים |
-| בדיקות concurrency מול SQL Server אמיתי ולא Moq | רק כך הן מוכיחות משהו |
+| בדיקות concurrency מול PostgreSQL אמיתי ולא Moq | רק כך הן מוכיחות משהו |
 | PBKDF2 לגיבוב סיסמאות (מובנה ב-.NET) | בלי חבילה נוספת |
 | התחברות = `POST /api/tokens` | REST: בלי שמות פעולות ב-URL |
 | ה-migrations וה-Seed רצים בעליית השרת (Development) | "המערכת עולה בלי התערבות ידנית בבסיס הנתונים" |

@@ -5,6 +5,7 @@ using WorkshopHub.Core.Entities;
 using WorkshopHub.Core.Enums;
 using WorkshopHub.Core.Interfaces.Repositories;
 using WorkshopHub.Data.Extensions;
+using WorkshopHub.Data.Querying;
 
 namespace WorkshopHub.Data.Repositories;
 
@@ -36,8 +37,10 @@ public class SessionRepository : ISessionRepository
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var term = query.Search.Trim();
-            sessions = sessions.Where(s => s.Workshop.Title.Contains(term) || s.Workshop.InstructorName.Contains(term));
+            var pattern = LikePattern.Containing(query.Search.Trim());
+            sessions = sessions.Where(s =>
+                EF.Functions.ILike(s.Workshop.Title, pattern, LikePattern.EscapeCharacter) ||
+                EF.Functions.ILike(s.Workshop.InstructorName, pattern, LikePattern.EscapeCharacter));
         }
 
         if (query.From is DateTime fromUtc)
@@ -76,7 +79,7 @@ public class SessionRepository : ISessionRepository
             .Include(s => s.Workshop)
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
-    public void SetOriginalRowVersion(Session session, byte[] rowVersion) =>
+    public void SetOriginalRowVersion(Session session, uint rowVersion) =>
         _context.Entry(session).Property(s => s.RowVersion).OriginalValue = rowVersion;
 
     public async Task AddAsync(Session session, CancellationToken cancellationToken = default) =>

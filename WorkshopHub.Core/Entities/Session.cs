@@ -30,14 +30,15 @@ public class Session
     public int WaitlistCount { get; set; }
 
     /// <summary>
-    /// ה-concurrency token של המפגש. SQL Server מעדכן את העמודה (rowversion) אוטומטית בכל שינוי בשורה.
+    /// ה-concurrency token של המפגש. ב-PostgreSQL הוא ממופה לעמודת המערכת xmin, שבסיס הנתונים
+    /// מעדכן אוטומטית בכל שינוי בשורה (המקבילה של rowversion ב-SQL Server).
     /// EF Core מוסיף את הערך שנקרא לתנאי ה-WHERE של ה-UPDATE: אם מישהו שינה את השורה בינתיים,
     /// אף שורה לא מתעדכנת והשמירה נכשלת – וכך שתי בקשות לא יכולות לתפוס את אותו מקום.
     /// כל פעולה על הרשמות המפגש (הרשמה, ביטול, הצטרפות להמתנה) משנה את שורת המפגש,
     /// ולכן כולן מוגנות על ידי אותו token.
     /// </summary>
     [Timestamp]
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public uint RowVersion { get; set; }
 
     public ICollection<Registration> Registrations { get; set; } = new List<Registration>();
 
