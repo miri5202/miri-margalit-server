@@ -126,16 +126,23 @@ dotnet ef database update        -p WorkshopHub.Data -s WorkshopHub.API
 dotnet ef database drop --force  -p WorkshopHub.Data -s WorkshopHub.API    # איפוס: בהרצה הבאה הכול נוצר מחדש
 ```
 
-## האתר המפורסם
+## האתר המפורסם (Render)
 
-המערכת מפורסמת גם כאתר חי: **http://workshophub.runasp.net** (Swagger: ‏`/swagger`).
-השרת (ASP.NET Core) ובסיס נתונים SQL Server מתארחים ב-MonsterASP.NET, והשרת מגיש גם את הלקוח – כך שהלקוח וה-API יושבים באותה כתובת, בלי CORS.
+השרת מפורסם בענן **Render** כ-Web Service מסוג Docker, לפי ה-`Dockerfile` שבשורש ה-repository: ‏Render מושך את ה-repository, בונה את ה-image (‏`dotnet publish` על `WorkshopHub.API`) ומריץ אותו.
 
-איך זה בנוי:
-- **הלקוח:** נבנה ב-repository של הלקוח עם `npm run build:site`, והקבצים שנוצרים נמצאים ב-`WorkshopHub.API/wwwroot`. כשהתיקייה קיימת, ‏`Program.cs` מגיש ממנה את הקבצים (`UseDefaultFiles` + `UseStaticFiles`). קוד המקור של הלקוח נמצא ב-repository שלו.
-- **הפרסום:** ‏Publish מ-Visual Studio (‏Release), והתוצר הועלה לאחסון.
-- **סודות:** סיסמת בסיס הנתונים ומפתח ה-JWT נמצאים רק בקובץ `appsettings.Production.json` שבשרת המארח, ולא ב-repo (הקובץ ב-`.gitignore`). התבנית בלי הסודות: `appsettings.Production.example.json`. אפשר במקום זה להגדיר אותם כמשתני סביבה (`ConnectionStrings__Default`, ‏`Jwt__Key`).
-- בעלייה הראשונה השרת החיל את ה-migrations ויצר את נתוני הדמו בעצמו, בדיוק כמו בהרצה המקומית.
+- **הלקוח:** נבנה ב-repository של הלקוח עם `npm run build:site`, והקבצים שנוצרים נמצאים ב-`WorkshopHub.API/wwwroot`. כשהתיקייה קיימת, ‏`Program.cs` מגיש ממנה את הקבצים (`UseDefaultFiles` + `UseStaticFiles`), כך שהלקוח וה-API יושבים באותה כתובת, בלי CORS. קוד המקור של הלקוח נמצא ב-repository שלו.
+- **בסיס הנתונים:** ‏SQL Server מתארח (‏Render מציע רק PostgreSQL, והפרויקט בנוי על SQL Server ועל `rowversion`).
+- **סודות:** לא נמצאים ב-repo. הם מוגדרים כ**משתני סביבה** ב-Render, ו-.NET קורא אותם אוטומטית (`__` מייצג `:`):
+
+| משתנה | תפקיד |
+|---|---|
+| `ConnectionStrings__Default` | החיבור לבסיס הנתונים (סוד) |
+| `Jwt__Key` | מפתח החתימה של ה-JWT (סוד) |
+| `Database__ApplyMigrationsOnStartup`, ‏`Database__SeedDemoData` | ‏`true` – בעלייה הראשונה השרת יוצר את הטבלאות ואת נתוני הדמו בעצמו |
+| `Swagger__Enabled` | ‏`true` – ‏Swagger זמין גם באתר החי (`/swagger`) |
+| `Https__Redirect` | ‏`false` – ‏Render מטפל ב-HTTPS לפני הקונטיינר |
+
+התבנית המלאה של ההגדרות: `appsettings.Production.example.json`.
 
 ## משתמשי דמו
 

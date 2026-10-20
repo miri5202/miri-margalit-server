@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/logs/
+**/*.user
+.vs/
+.git/
+WorkshopHub.Tests/
+scripts/
+**/appsettings.Production.json
+**/Properties/PublishProfiles/
