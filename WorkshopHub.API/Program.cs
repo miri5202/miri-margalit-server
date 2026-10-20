@@ -210,6 +210,10 @@ try
                 "dotnet user-secrets set \"ConnectionStrings:Default\" \"<connection string>\" --project WorkshopHub.API");
         }
 
+        // אבחון: לפני המיגרציות בודקים אם שרת בסיס הנתונים בכלל נגיש ברשת (DNS + פורט),
+        // כדי שבענן תהיה הודעה ברורה במקום חריגת רשת כללית של SqlClient
+        await LogDatabaseReachabilityAsync(app.Configuration.GetConnectionString("Default")!, startupLogger);
+
         // IDbInitializer הוא scoped (הוא מחזיק DbContext), ולכן פותחים scope ידני – אין כאן בקשת HTTP
         await using var scope = app.Services.CreateAsyncScope();
         var initializer = scope.ServiceProvider.GetRequiredService<IDbInitializer>();
@@ -259,6 +263,31 @@ try
     app.MapControllers();
 
     await app.RunAsync();
+
+    // כותב ללוג לאיזו כתובת שרת בסיס הנתונים מתורגם ואם אפשר לפתוח אליו חיבור TCP.
+    // לא כותב את ה-connection string עצמו – יש בו סיסמה.
+    static async Task LogDatabaseReachabilityAsync(string connectionString, NLog.Logger logger)
+    {
+        var dataSource = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).DataSource;
+        var hostAndPort = dataSource.Replace("tcp:", string.Empty, StringComparison.OrdinalIgnoreCase).Split(',');
+        var host = hostAndPort[0].Split('\\')[0].Trim();
+        var port = hostAndPort.Length > 1 && int.TryParse(hostAndPort[1].Trim(), out var parsedPort) ? parsedPort : 1433;
+
+        try
+        {
+            var addresses = await System.Net.Dns.GetHostAddressesAsync(host);
+            logger.Info("Database server {0}:{1} resolves to {2}", host, port, string.Join(", ", addresses.Select(a => a.ToString())));
+
+            using var tcpClient = new System.Net.Sockets.TcpClient();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await tcpClient.ConnectAsync(host, port, timeout.Token);
+            logger.Info("Database server {0}:{1} is reachable (TCP connection succeeded)", host, port);
+        }
+        catch (Exception exception) when (exception is System.Net.Sockets.SocketException or OperationCanceledException)
+        {
+            logger.Warn("Database server {0}:{1} is NOT reachable from this machine: {2}", host, port, exception.Message);
+        }
+    }
 }
 catch (Exception exception) when (exception is not HostAbortedException)
 {
