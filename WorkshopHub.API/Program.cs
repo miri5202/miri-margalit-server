@@ -60,6 +60,7 @@ try
         .ValidateOnStart();
 
     builder.Services.Configure<DatabaseSettings>(builder.Configuration.GetSection(DatabaseSettings.SectionName));
+    builder.Services.Configure<AdminAccountSettings>(builder.Configuration.GetSection(AdminAccountSettings.SectionName));
 
     // =====================================================================
     //  Data – DbContext ו-Repositories
@@ -203,7 +204,8 @@ try
     _ = app.Services.GetRequiredService<IOptions<JwtSettings>>().Value;
 
     var databaseSettings = app.Services.GetRequiredService<IOptions<DatabaseSettings>>().Value;
-    if (databaseSettings.ApplyMigrationsOnStartup || databaseSettings.SeedDemoData)
+    var adminAccountSettings = app.Services.GetRequiredService<IOptions<AdminAccountSettings>>().Value;
+    if (databaseSettings.ApplyMigrationsOnStartup || databaseSettings.SeedDemoData || adminAccountSettings.IsConfigured)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -219,7 +221,7 @@ try
         // IDbInitializer הוא scoped (הוא מחזיק DbContext), ולכן פותחים scope ידני – אין כאן בקשת HTTP
         await using var scope = app.Services.CreateAsyncScope();
         var initializer = scope.ServiceProvider.GetRequiredService<IDbInitializer>();
-        await initializer.InitializeAsync(databaseSettings.ApplyMigrationsOnStartup, databaseSettings.SeedDemoData);
+        await initializer.InitializeAsync(databaseSettings, adminAccountSettings);
     }
 
     // =====================================================================

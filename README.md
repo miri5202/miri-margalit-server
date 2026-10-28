@@ -143,15 +143,19 @@ dotnet ef database drop --force  -p WorkshopHub.Data -s WorkshopHub.API    # א�
 |---|---|
 | `ConnectionStrings__Default` | החיבור לבסיס הנתונים (סוד) |
 | `Jwt__Key` | מפתח החתימה של ה-JWT (סוד) |
-| `Database__ApplyMigrationsOnStartup`, ‏`Database__SeedDemoData` | ‏`true` – בעלייה הראשונה השרת יוצר את הטבלאות ואת נתוני הדמו בעצמו |
+| `Database__ApplyMigrationsOnStartup` | ‏`true` – בכל עלייה השרת מחיל migrations חדשות בעצמו |
+| `Database__SeedDemoData` | ‏`false` – **באתר המפורסם אין משתמשי דמו.** כשההגדרה כבויה, השרת נועל בכל עלייה את חשבונות הדמו (אם נשארו מהעבר) – מקבלים סיסמה אקראית שאף אחד לא יודע |
+| `AdminAccount__Email`, ‏`AdminAccount__Password` | חשבון המנהלת של האתר (סוד, לפחות 12 תווים). בכל עלייה השרת מוודא שהחשבון קיים, שהוא Admin ושהסיסמה היא זו שהוגדרה – כך מחליפים סיסמה בלי לגעת בבסיס הנתונים |
 | `Swagger__Enabled` | ‏`true` – ‏Swagger זמין גם באתר החי (`/swagger`) |
 | `Https__Redirect` | ‏`false` – ‏Render מטפל ב-HTTPS לפני הקונטיינר |
 
 התבנית המלאה של ההגדרות: `appsettings.Production.example.json`.
 
-## משתמשי דמו
+## משתמשי דמו (הרצה מקומית בלבד)
 
-נוצרים אוטומטית בסביבת הפיתוח (`WorkshopHub.Data/Seed`). אלה פרטי הדגמה בלבד; בבסיס הנתונים נשמר רק גיבוב הסיסמה.
+נוצרים אוטומטית **רק בסביבת הפיתוח המקומית** (`Database:SeedDemoData=true` ב-`appsettings.Development.json`), כדי שאפשר יהיה להדגים את המערכת על המחשב. בבסיס הנתונים נשמר רק גיבוב הסיסמה.
+
+> **באתר המפורסם החשבונות האלה לא עובדים.** שם `SeedDemoData` כבוי, והשרת נועל אותם בעלייה. כפתורי "לנסות בלי להירשם" בלקוח מופיעים רק ב-`npm run dev` ולא נכללים בבנייה לאתר. המנהלת של האתר מוגדרת במשתני הסביבה `AdminAccount__*`.
 
 | תפקיד | מייל | סיסמה |
 |---|---|---|

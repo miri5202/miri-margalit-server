@@ -4,6 +4,8 @@ using WorkshopHub.Core.Entities;
 using WorkshopHub.Core.Enums;
 using WorkshopHub.Core.Interfaces.Repositories;
 using WorkshopHub.Core.Interfaces.Services;
+using WorkshopHub.Core.Settings;
+using System.Security.Cryptography;
 
 namespace WorkshopHub.Data.Seed;
 
@@ -30,16 +32,97 @@ public class DbInitializer : IDbInitializer
         _logger = logger;
     }
 
-    public async Task InitializeAsync(bool applyMigrations, bool seedDemoData, CancellationToken cancellationToken = default)
+    public async Task InitializeAsync(DatabaseSettings database, AdminAccountSettings adminAccount, CancellationToken cancellationToken = default)
     {
-        if (applyMigrations)
+        if (database.ApplyMigrationsOnStartup)
         {
             _logger.LogInformation("Applying pending database migrations");
             await _context.Database.MigrateAsync(cancellationToken);
         }
 
-        if (seedDemoData)
+        if (database.SeedDemoData)
             await SeedAsync(cancellationToken);
+
+        if (adminAccount.IsConfigured)
+            await EnsureAdminAccountAsync(adminAccount, cancellationToken);
+
+        // באתר המפורסם נתוני הדמו כבויים: חשבונות הדמו (שהסיסמאות שלהם ידועות) ננעלים
+        if (!database.SeedDemoData)
+            await LockDemoAccountsAsync(adminAccount, cancellationToken);
+    }
+
+    /// <summary>
+    /// מוודא שחשבון המנהלת שהוגדר במשתני הסביבה קיים, הוא Admin, והסיסמה שלו היא הסיסמה שהוגדרה.
+    /// כך מחליפים סיסמה בלי לגעת בבסיס הנתונים: משנים את המשתנה ב-Render ומפעילים מחדש.
+    /// </summary>
+    private async Task EnsureAdminAccountAsync(AdminAccountSettings settings, CancellationToken cancellationToken)
+    {
+        if (settings.Password!.Length < AdminAccountSettings.MinPasswordLength)
+        {
+            throw new InvalidOperationException(
+                $"AdminAccount:Password must be at least {AdminAccountSettings.MinPasswordLength} characters long.");
+        }
+
+        var email = settings.Email!.Trim().ToLowerInvariant();
+        var admin = await _context.Users.SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
+
+        if (admin is null)
+        {
+            _context.Users.Add(new User
+            {
+                FullName = settings.FullName,
+                Email = email,
+                PasswordHash = _passwordHasher.Hash(settings.Password),
+                Role = UserRole.Admin,
+                CreatedAtUtc = _clock.GetUtcNow().UtcDateTime
+            });
+            _logger.LogInformation("Admin account created from configuration");
+        }
+        else
+        {
+            admin.Role = UserRole.Admin;
+            if (!_passwordHasher.Verify(settings.Password, admin.PasswordHash))
+            {
+                admin.PasswordHash = _passwordHasher.Hash(settings.Password);
+                _logger.LogInformation("Admin account password updated from configuration");
+            }
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// נועל את חשבונות הדמו: מי שהסיסמה שלו עדיין סיסמת הדמו המתועדת מקבל סיסמה אקראית שאף אחד לא יודע.
+    /// המשתמשים וההרשמות שלהם נשארים (כדי לא לשבור נתונים), אבל אי אפשר יותר להתחבר אליהם.
+    /// הפעולה idempotent – חשבון שכבר ננעל לא משתנה שוב.
+    /// </summary>
+    private async Task LockDemoAccountsAsync(AdminAccountSettings adminAccount, CancellationToken cancellationToken)
+    {
+        var configuredAdmin = adminAccount.Email?.Trim().ToLowerInvariant();
+        var demoPasswords = DemoData.Members
+            .Select(m => (m.Email, DemoData.MemberPassword))
+            .Append((DemoData.AdminEmail, DemoData.AdminPassword))
+            .Where(d => d.Item1 != configuredAdmin)
+            .ToDictionary(d => d.Item1, d => d.Item2);
+
+        var emails = demoPasswords.Keys.ToList();
+        var users = await _context.Users.Where(u => emails.Contains(u.Email)).ToListAsync(cancellationToken);
+
+        var locked = 0;
+        foreach (var user in users)
+        {
+            if (!_passwordHasher.Verify(demoPasswords[user.Email], user.PasswordHash))
+                continue;
+
+            user.PasswordHash = _passwordHasher.Hash(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+            locked++;
+        }
+
+        if (locked > 0)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            _logger.LogWarning("Locked {Count} demo account(s) - demo data is disabled in this environment", locked);
+        }
     }
 
     private async Task SeedAsync(CancellationToken cancellationToken)
